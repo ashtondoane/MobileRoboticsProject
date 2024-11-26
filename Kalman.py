@@ -90,21 +90,3 @@ def ekf(state_est_prev, control_vect_prev, P_prev, obs_camera, obs_odometry, cam
     P_est = P_pred - K @ H @ P_pred
 
     return state_est, P_est
-
-
-def speed_convesion(r_speed,l_speed):
-    thymio_speed_to_mms = 0.430 # value found in covariance_estimation
-
-    #odometry 
-    avg_thymio_speed = (r_speed + l_speed) / 2
-    speed = avg_thymio_speed * thymio_speed_to_mms # [mm/s]
-    return speed
-
-def angular_vel_conversion(r_speed,l_speed):
-    d = 95 # distance between the 2 wheels [mm]
-    thymio_speed_to_mms = 0.430 # value found in covariance_estimation
-    
-    difference_speed = l_speed - r_speed
-    omega = difference_speed * thymio_speed_to_mms / d # [rad/s]
-
-    return omega
