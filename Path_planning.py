@@ -53,48 +53,50 @@ def Heuristic_function(node, goal):
     return max(dx, dy) + (math.sqrt(2) - 1) * min(dx, dy)
 
 # A* search algorithm
-def A_star(environment_map, START_POSITION, GOAL_POSITION):
+def A_star(environment_map, start_position, goal_position):
 
-    START_NODE = NODE(START_POSITION, g=0)
-    GOAL_NODE = NODE(GOAL_POSITION)
+    # Create the start and goal nodes
+    start_node = NODE(start_position, g=0)
+    goal_node = NODE(goal_position)
 
-    START_NODE.h = Heuristic_function(START_NODE, GOAL_NODE)
-    START_NODE.f = START_NODE.g + START_NODE.h
+    # Set the heuristic value for the start node
+    start_node.h = Heuristic_function(start_node, goal_node)
+    start_node.f = start_node.g + start_node.h
 
     # Initialize the open and closed lists
-    OPEN_list = []
-    heapq.heappush(OPEN_list, START_NODE)
-    CLOSED_set = set()
+    open_list = []
+    heapq.heappush(open_list, start_node)
+    closed_set = set()
 
     # Dictionary to keep track of nodes
     nodes = {}
-    nodes[tuple(START_NODE.position)] = START_NODE
+    nodes[tuple(start_node.position)] = start_node
 
-    while OPEN_list:
+    while open_list:
         # Pop the node with the lowest f value
-        CURRENT_NODE = heapq.heappop(OPEN_list)
+        current_node = heapq.heappop(open_list)
 
         # If the current node is in the closed set, skip it
-        if tuple(CURRENT_NODE.position) in CLOSED_set:
+        if tuple(current_node.position) in closed_set:
             continue
 
         # Add the current node's position to the closed set
-        CLOSED_set.add(tuple(CURRENT_NODE.position))
+        closed_set.add(tuple(current_node.position))
 
         # If the current node is the goal, reconstruct the path
-        if CURRENT_NODE.position == GOAL_NODE.position:
-            path = NODE.reconstruct_path(CURRENT_NODE)
+        if current_node.position == goal_node.position:
+            path = NODE.reconstruct_path(current_node)
             print("Path found:", path)
             return path
 
         # Possible moves: 8 directions (including diagonals)
-        MOVES = [[1, 0], [0, 1], [-1, 0], [0, -1],
+        moves = [[1, 0], [0, 1], [-1, 0], [0, -1],
                  [1, 1], [-1, -1], [1, -1], [-1, 1]]
 
         # Explore neighbors
-        for move in MOVES:
-            neighbor_position = [CURRENT_NODE.position[0] + move[0],
-                                 CURRENT_NODE.position[1] + move[1]]
+        for move in moves:
+            neighbor_position = [current_node.position[0] + move[0],
+                                 current_node.position[1] + move[1]]
             neighbor_pos = tuple(neighbor_position)
 
             # Skip if out of bounds or obstacle
@@ -104,15 +106,16 @@ def A_star(environment_map, START_POSITION, GOAL_POSITION):
                 continue
 
             # Skip if in closed set
-            if neighbor_pos in CLOSED_set:
+            if neighbor_pos in closed_set:
                 continue
 
-            # Calculate movement cost (diagnoal movement cost is sqrt(2))
+            # Calculate movement cost (diagonal movement cost is sqrt(2))
             dx = abs(move[0])
             dy = abs(move[1])
             movement_cost = math.sqrt(2) if dx == 1 and dy == 1 else 1
 
-            g_tentative = CURRENT_NODE.g + movement_cost
+            # Calculate tentative g value
+            g_tentative = current_node.g + movement_cost
 
             # Create or get the neighbor node
             if neighbor_pos not in nodes:
@@ -124,12 +127,12 @@ def A_star(environment_map, START_POSITION, GOAL_POSITION):
             # If this path to neighbor is better, record it
             if g_tentative < neighbor_node.g:
                 neighbor_node.g = g_tentative
-                neighbor_node.h = Heuristic_function(neighbor_node, GOAL_NODE)
+                neighbor_node.h = Heuristic_function(neighbor_node, goal_node)
                 neighbor_node.f = neighbor_node.g + neighbor_node.h
-                neighbor_node.parent = CURRENT_NODE
+                neighbor_node.parent = current_node
 
                 # Add the neighbor to the open list
-                heapq.heappush(OPEN_list, neighbor_node)
+                heapq.heappush(open_list, neighbor_node)
 
     print("No path found.")
     return None
