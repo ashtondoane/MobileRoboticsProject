@@ -2,8 +2,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-Ts=0.1
-
 A = np.array([[1,0,0,0,0], [0,1,0,0,0], [0,0,1,0,0], [0,0,0,0,0], [0,0,0,0,0]])
 
 # State covariance
@@ -35,7 +33,7 @@ sensor_noise_cam=np.zeros(R_cam.shape[0])
 sensor_noise_odo=np.zeros(R_odometry.shape[0])
 
 
-def ekf(state_est_prev, control_vect_prev, P_prev, obs_camera, obs_odometry, camera_state):
+def ekf(state_est_prev, control_vect_prev, P_prev, obs_camera, obs_odometry, camera_state, Ts):
     """
     Estimates the current state using input sensor data and the previous state
     
