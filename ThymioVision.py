@@ -140,8 +140,7 @@ class ThymioVision:
         # Camera shape (1080, 1920, 3)
         # Paper dimensions (841 x 1189mm)
         # Alignment from calibration such that 1 px = 0.9344 mm
-        # return ((position[0]-360)*0.9344/10, (position[1]-90)*0.9344/10)
-        return ((position[0]-360)*0.416/10,(position[1]-90)*0.416/10) #TEMPORARY SETUP NOV29
+        return ((position[0]-360)*0.9344/10, (position[1]-90)*0.9344/10)
 
     #TODO: ADD VISUALIZATION OF STEPS
     @staticmethod
@@ -191,7 +190,6 @@ class ThymioVision:
         """
         Note: Does NOT support TM_SQDIFF or SQDIFF_NORMED
         """
-        return(frame.shape[1]-360,frame.shape[0]-90)
         template = cv2.imread(templatePath) #read template as bgr image
         globalMax = 0
         best_approx = ([], 0, 0, 0) #pos/w/h/scale
