@@ -1,6 +1,14 @@
-import cv2 # used for image processing
-import numpy as np # used for array manipulation in conjuction with
-import matplotlib.pyplot as plt # used for displaying processing steps for your aid!
+"""
+ * ThymioVision Class Definition
+ *
+ * For a thorough report of this class, please consider the file report_cv.ipynb
+ * 
+ * @author Ashton Doane
+"""
+
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
 
 class ThymioVision:
     @staticmethod
@@ -91,12 +99,6 @@ class ThymioVision:
         else:
             pass
 
-        final_img = np.zeros(shape=edges.shape)
-        for i, row in enumerate(edges):
-            for j, pixel in enumerate(row):
-                if pixel == 255:
-                    cv2.circle(final_img, (j,i), 5, 255)
-
         # If verbose selected, Display images
         if verbose:
             # Set up plot size
@@ -107,20 +109,6 @@ class ThymioVision:
                     top=0.9, 
                     wspace=0.1, 
                     hspace=0.4)
-            # plt.tick_params(
-            #     axis='x',          # changes apply to the x-axis
-            #     which='both',      # both major and minor ticks are affected
-            #     bottom=False,      # ticks along the bottom edge are off
-            #     top=False,         # ticks along the top edge are off
-            #     labelbottom=False
-            # )
-            # plt.tick_params(
-            #     axis='y',          # changes apply to the x-axis
-            #     which='both',      # both major and minor ticks are affected
-            #     bottom=False,      # ticks along the bottom edge are off
-            #     top=False,         # ticks along the top edge are off
-            #     labelbottom=False
-            # )
             
             #Grayscaled Image:
             plt.subplot(1, 3, 1)
@@ -135,7 +123,7 @@ class ThymioVision:
             #Edges + expansion radius Image:
             plt.subplot(1, 3, 3)
             plt.title("Edges: " + edge_method)
-            plt.imshow(final_img, cmap='gray')
+            plt.imshow(edges, cmap='gray')
 
             plt.show()
             
@@ -150,9 +138,10 @@ class ThymioVision:
         @returns (x,y) tuple of location in real space in cm.
         """
         # Camera shape (1080, 1920, 3)
-        # Paper dimensions (841 x 1189)
+        # Paper dimensions (841 x 1189mm)
         # Alignment from calibration such that 1 px = 0.9344 mm
-        return (position[0]*0.9344*10, position[1]*0.9344*10)
+        # return ((position[0]-360)*0.9344/10, (position[1]-90)*0.9344/10)
+        return ((position[0]-360)*0.416/10,(position[1]-90)*0.416/10) #TEMPORARY SETUP NOV29
 
     #TODO: ADD VISUALIZATION OF STEPS
     @staticmethod
@@ -165,7 +154,7 @@ class ThymioVision:
         best_approx = ([], 0, 0, 0) #pos/w/h/scale
         
         # resize the template image to a variety of scales, perform matching 
-        for scale in np.linspace(0.1, 2.0, divisions)[::-1]:
+        for scale in np.linspace(0.5, 2.0, divisions)[::-1]:
             resized = cv2.resize(frame, (0,0), fx=scale, fy=scale) #resize copy
             
             # get effective size of rectangle bounding box we are searching
@@ -202,6 +191,7 @@ class ThymioVision:
         """
         Note: Does NOT support TM_SQDIFF or SQDIFF_NORMED
         """
+        return(frame.shape[1]-360,frame.shape[0]-90)
         template = cv2.imread(templatePath) #read template as bgr image
         globalMax = 0
         best_approx = ([], 0, 0, 0) #pos/w/h/scale
@@ -240,7 +230,7 @@ class ThymioVision:
         return (x,y) #return center of box
     
     @staticmethod
-    def detectOrangeHeading(frame, reduction = 0.1, THRESHOLD = 25, verbose = False):
+    def detectOrangeHeading(frame, reduction = 0.1, THRESHOLD = 50, verbose = False):
         lower_quality = cv2.resize(frame, (0,0), fx = reduction, fy = reduction) # rescale for faster processing
         # Create a mask that looks for only the light indicator for position
         hsv = cv2.cvtColor(lower_quality, cv2.COLOR_BGR2HSV) #convert to hsv for masking
@@ -278,32 +268,58 @@ class ThymioVision:
                 
             
     @staticmethod
-    def getThymioPose(frame):
+    def getThymioPose(frame, verbose=False):
         """
         Extracts the Thymio pose from a camera feed and returns as a triple of (x,y,theta), relative to the top-left corner of the camera.
         @param frame (np.array): BGR cv2 image to extract position from.
-        @returns 
+        @returns (x, y, theta, size)
         """
         blueX, blueY = ThymioVision.detectBlueDot(frame)
         orangeX, orangeY = ThymioVision.detectOrangeHeading(frame)
 
         if blueX is None or orangeX is None:
-            return (None, None, None, None, None)
+            return (None, None, None, None)
         dx = float(orangeX-blueX)
         dy = -float(orangeY-blueY)
         theta = np.arctan2(dy,dx)
 
+        if verbose:
+            plt.imshow(frame)
+            plt.plot([blueX], [blueY], 'o')
+            plt.show()
         return (blueX, blueY, theta)
 
+
     @staticmethod 
-    def getMap():
+    def getMap(frame, verbose=False):
         """
-        Takes Leverages findEdges, getThymioPos and detectGoal to build a map, removing any edges that the Thymio is contributing.
-        
+        Determine the map of the layout by considering thymio position, size, detected edges, and goal position. 
+        @param frame (np.array): A camera image
+        @returns Tuple (map, start, goal) with types (np.array, [x,y], [x,y]) representing the map of edges, start location
+        and goal position for the A* algorithm.
         """
         # Get edge list
-        # Find thymio
-        # Remove edges within the radius of the thymio
-        # Find goal
-        # Mark goal on map and return (map, status) --> status indicates if any step failed i.e. no goal, no thymio, etc...
-        pass
+        edges = ThymioVision.getEdges(frame)
+
+        # Find start and goal position
+        startPos = ThymioVision.detectBlueDot(frame)
+        if not startPos:
+            print("Thymio start position not found")
+        tSize =  100 #50 # based on the calibrated camera, the thymio can be approximated by this radius
+        goalPos = ThymioVision.detectGoal(frame)
+        if not goalPos:
+            print("Goal not found")
+            return
+
+
+        # clear out space around goal and start
+        cv2.circle(edges, startPos, radius=int(tSize), thickness=-1, color=0)
+        cv2.circle(edges, goalPos, radius=int(tSize), thickness=-1, color=0)
+        #radius
+        final_map = np.zeros(shape=edges.shape)
+        for i, row in enumerate(edges):
+            for j, pixel in enumerate(row):
+                if pixel == 255:
+                    cv2.circle(final_map, (j,i), radius=int(tSize), thickness=-1, color=1)
+
+        return (final_map, startPos, goalPos)
