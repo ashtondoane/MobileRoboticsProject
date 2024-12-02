@@ -6,14 +6,13 @@ import numpy as np
 # State covariance
 
 # q_p = q_x = q_y
-q_p=0.04
+q_p = 0.04
 q_v = 75.72
 
 # VALUES TO BE DETERMINED
-q_yaw=0.00016
+q_yaw = 0.00016
 q_w = 0.0008
 
-#Should be squared values as it is a covariance matrix and not a variance matrix ???
 
 Q = np.array([
     [q_p, 0, 0, 0, 0], 
@@ -67,7 +66,7 @@ def get_state_transition_matrix(state, Ts):
     return A
 
 
-def ekf_filter(x_est_prev, P_est_prev, Ts, measurement, Q, R, camera_state, obs_camera, obs_odometry):
+def ekf_filter(x_est_prev, P_est_prev, Ts, Q, R, camera_state, obs_camera, obs_odometry):
     """
     Estimates the current state using input sensor data and the previous state
     
