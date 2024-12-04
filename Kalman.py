@@ -18,27 +18,27 @@ def ekf(state_est_prev, control_vect_prev, P_prev, obs_camera, obs_odometry, cam
     return P_est: new a posteriori state covariance
     """
 
-    q_x=2
-    q_y=0.3
-    q_yaw=0.001
-    q_v = 5
-    q_w = 0.003
+    # State covariance 
+    q_p=0.04
+    q_yaw=0.01 
+    q_v = 6
+    q_w = 0.009
 
     Q = np.array([
-        [q_x, 0, 0, 0, 0], 
-        [0, q_y, 0, 0, 0], 
+        [q_p, 0, 0, 0, 0], 
+        [0, q_p, 0, 0, 0], 
         [0, 0, q_yaw, 0, 0], 
         [0, 0, 0, q_v, 0], 
         [0, 0, 0, 0, q_w]
     ])
 
-    r_p=1
-    r_yaw=0.05
-    r_v = 5
-    r_w = 0.003
+    # Measurement covariance 
+    r_p=0.001
+    r_yaw=0.001
+    r_v = 6
+    r_w = 0.009
 
-    # Assuming r_x, r_y, r_yaw, r_v, and r_w are standard deviations
-    R_cam = np.array([
+    R = np.array([
         [r_p, 0, 0, 0, 0],
         [0, r_p, 0, 0, 0],
         [0, 0, r_yaw, 0, 0],
@@ -46,17 +46,22 @@ def ekf(state_est_prev, control_vect_prev, P_prev, obs_camera, obs_odometry, cam
         [0, 0, 0, 0, r_w]
     ])
 
-    R_odometry = np.array([
-        [r_v, 0],
-        [0, r_w]
+    R_no_camera = np.array([
+        [np.inf, 0, 0, 0, 0],
+        [0, np.inf, 0, 0, 0],
+        [0, 0, np.inf, 0, 0],
+        [0, 0, 0, r_v, 0],
+        [0, 0, 0, 0, r_w]
     ])
 
 
-    # state_pred = A @ state_est_prev + B @ control_vect_prev 
+    H=np.eye(5)
+
+    # Prediction Step
+
     x, y, yaw, v, omega = state_est_prev
     v_cmd, omega_cmd = control_vect_prev
     
-    # Prediction Step
     x_pred = x + Ts * v * np.cos(yaw)
     y_pred = y + Ts * v * np.sin(yaw)
     yaw_pred = yaw + Ts * omega
@@ -65,7 +70,6 @@ def ekf(state_est_prev, control_vect_prev, P_prev, obs_camera, obs_odometry, cam
     state_pred = np.array([x_pred, y_pred, yaw_pred, v_pred, omega_pred])
     
     # Predict the state covariance P_pred
-    # v=control_vect_prev[0]
     G = np.array([[1,0,-np.sin(yaw)*Ts*v,np.cos(yaw)*Ts,0],
                   [0,1,np.cos(yaw)*Ts*v, np.sin(yaw)*Ts,0],
                   [0,0,1,0,Ts],
@@ -77,14 +81,11 @@ def ekf(state_est_prev, control_vect_prev, P_prev, obs_camera, obs_odometry, cam
 
     # inovation / measurement residual    
     if camera_state:
-        R = R_cam
         obs_vect=np.concatenate((obs_camera,obs_odometry))
-        H=np.eye(5)
     else:
-        R = R_odometry
-        obs_vect=obs_odometry
-        H=np.array([[0, 0, 0, 1, 0],
-                      [0, 0, 0, 0, 1]])
+        R = R_no_camera
+        obs_vect=[0, 0, 0, *obs_odometry]
+
 
     i = obs_vect - (H @ state_pred)
     
@@ -96,6 +97,7 @@ def ekf(state_est_prev, control_vect_prev, P_prev, obs_camera, obs_odometry, cam
 
     # Update state estimate
     state_est = state_pred + K @ i
+
     # Update covariance estimate
     P_est = P_pred - K @ (H @ P_pred)
 
