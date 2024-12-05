@@ -12,14 +12,14 @@ import matplotlib.pyplot as plt
 
 class ThymioVision:
     @staticmethod
-    def calibrateCameraPos():
+    def calibrateCameraPos(camNum):
         """
         Position the camera such that it aligns with the corners of A0 paper as shown. This
         is purely for user setup, and does not return a value. If dots are aligned with the corners of
         A0 paper, ensures that 1 px = 0.9344 mm
         """
         cv2.namedWindow("Camera Calibration") 
-        vc = cv2.VideoCapture(0)
+        vc = cv2.VideoCapture(camNum)
         ret = True
         while True:
             ret, frame = vc.read()
@@ -41,7 +41,7 @@ class ThymioVision:
         cv2.destroyAllWindows()
 
     @staticmethod
-    def captureImageOnCommand():
+    def captureImageOnCommand(camNum):
         """
         Provides the user with a camera feed, from which the user may input 'C' to
         capture the image provided. Does not complete without user input.
@@ -49,7 +49,7 @@ class ThymioVision:
         @returns cv2 grayscale image with detected edges from input img.
         """
         cv2.namedWindow("Camera View")
-        vc = cv2.VideoCapture(0)
+        vc = cv2.VideoCapture(camNum)
         ret = True
         while True:
             ret, frame = vc.read()
@@ -138,13 +138,27 @@ class ThymioVision:
         @returns (x,y) tuple of location in real space in cm.
         """
         # Camera shape (1080, 1920, 3)
+        # Size of bounding box (900, 1200)
+        # Paper dimensions (675 x 900 mm)
+        # Alignment from calibration such that 1 px = 0.75 mm
+        return ((position[0]-360)*0.75/10, (position[1]-90)*0.75/10)
+    
+    @staticmethod #66 cm x 90 --> 
+    def realSpaceToPixel(position):
+        """
+        Converts a real location to a location on the camera. Coordinate frame centered on the top left corner of the paper.
+        As the setup always ensures alignment of the camera to the corners of A0 paper, the ratio is set.
+        @param position (x,y): Pixel location on the camera image.
+        @returns (x,y) tuple of location in real space in cm.
+        """
+        # Camera shape (1080, 1920, 3)
         # Paper dimensions (841 x 1189mm)
         # Alignment from calibration such that 1 px = 0.9344 mm
-        return ((position[0]-360)*0.9344/10, (position[1]-90)*0.9344/10)
+        return (int(position[0]*10/0.75)+360, int(position[1]*10/0.75)+90)
 
     #TODO: ADD VISUALIZATION OF STEPS
     @staticmethod
-    def detectBlueDot(frame, divisions=3, method = 'TM_CCORR_NORMED', templatePath = "Templates/blueDot2.png", verbose=False):
+    def detectBlueDot(frame, divisions=1, minScale=1, maxScale = 2, method = 'TM_CCORR_NORMED', templatePath = "Templates/blueDot.png", verbose=False):
         """
         Note: Does NOT support TM_SQDIFF or SQDIFF_NORMED
         """
@@ -153,8 +167,8 @@ class ThymioVision:
         best_approx = ([], 0, 0, 0) #pos/w/h/scale
         
         # resize the template image to a variety of scales, perform matching 
-        for scale in np.linspace(0.5, 2.0, divisions)[::-1]:
-            resized = cv2.resize(frame, (0,0), fx=scale, fy=scale) #resize copy
+        for scale in np.linspace(minScale, maxScale, divisions)[::-1]:
+            resized = cv2.resize(frame, (0,0), fx=scale, fy=scale) #resize
             
             # get effective size of rectangle bounding box we are searching
             w, h, c = template.shape
@@ -177,8 +191,9 @@ class ThymioVision:
 
         if verbose:
             copy = frame.copy()
+            plt.rcParams["figure.figsize"] = (16,4)
             cv2.rectangle(copy, top_left, bottom_right, (255, 50, 255), 5)
-            plt.subplot(122),plt.imshow(copy,cmap = 'gray')
+            plt.imshow(copy,cmap = 'gray')
             plt.show()
         
         x = top_left[0] + int(w/2)
@@ -219,8 +234,9 @@ class ThymioVision:
 
         if verbose:
             copy = frame.copy()
+            plt.rcParams["figure.figsize"] = (16,4)
             cv2.rectangle(copy, top_left, bottom_right, (255, 50, 255), 5)
-            plt.subplot(122),plt.imshow(copy,cmap = 'gray')
+            plt.imshow(copy,cmap = 'gray')
             plt.show()
         
         x = top_left[0] + int(w/2)
@@ -228,12 +244,14 @@ class ThymioVision:
         return (x,y) #return center of box
     
     @staticmethod
-    def detectOrangeHeading(frame, reduction = 0.1, THRESHOLD = 50, verbose = False):
-        lower_quality = cv2.resize(frame, (0,0), fx = reduction, fy = reduction) # rescale for faster processing
+    # TODO BASE ON MEDIAN RATHER THAN AVERAGE
+    def detectOrangeHeading(frame, reduction = 0.3, THRESHOLD = 25, filter_size = 10, verbose = False):
+        filtered =  cv2.blur(frame, (filter_size,filter_size))
+        lower_quality = cv2.resize(filtered, (0,0), fx = reduction, fy = reduction) # rescale for faster processing
         # Create a mask that looks for only the light indicator for position
         hsv = cv2.cvtColor(lower_quality, cv2.COLOR_BGR2HSV) #convert to hsv for masking
-        lower_orange = np.array([0, 0, 230]) # hue/saturation/brightness
-        upper_orange = np.array([180, 255, 255]) 
+        lower_orange = np.array([0, 20, 220]) # hue/saturation/brightness
+        upper_orange = np.array([60, 255, 255]) 
         mask = cv2.inRange(hsv, lower_orange, upper_orange)
         result = cv2.bitwise_and(lower_quality, lower_quality, mask=mask) # image correcting
 
@@ -264,6 +282,7 @@ class ThymioVision:
 
         return (centerX, centerY)
                 
+                
             
     @staticmethod
     def getThymioPose(frame, verbose=False):
@@ -272,18 +291,31 @@ class ThymioVision:
         @param frame (np.array): BGR cv2 image to extract position from.
         @returns (x, y, theta, size)
         """
-        blueX, blueY = ThymioVision.detectBlueDot(frame)
-        orangeX, orangeY = ThymioVision.detectOrangeHeading(frame)
+        relevantFrame = frame[90:-90, 360:-360]
+        blueX, blueY = ThymioVision.detectBlueDot(relevantFrame, minScale=0.5, maxScale=0.5, divisions=1)
+        orangeX, orangeY = ThymioVision.detectOrangeHeading(relevantFrame, reduction=0.3, THRESHOLD=15, filter_size=10)
 
         if blueX is None or orangeX is None:
-            return (None, None, None, None)
+            print('Thymio not found.')
+            return (None, None, None)
+        
+        blueX += 360
+        blueY += 90
+        orangeX += 360
+        orangeY += 90
+
         dx = float(orangeX-blueX)
         dy = -float(orangeY-blueY)
         theta = np.arctan2(dy,dx)
 
+        if np.sqrt(dx**2 + dy**2 ) > 300:
+            print('Thymio not found. Distance too large')
+            return (None, None, None)
+
         if verbose:
+            plt.rcParams["figure.figsize"] = (16,4)
             plt.imshow(frame)
-            plt.plot([blueX], [blueY], 'o')
+            plt.quiver(blueX, blueY, dx, dy, color='red')
             plt.show()
         return (blueX, blueY, theta)
 
@@ -300,16 +332,21 @@ class ThymioVision:
         edges = ThymioVision.getEdges(frame)
 
         # Find start and goal position
-        startPos = ThymioVision.detectBlueDot(frame)
+        startPos = ThymioVision.getThymioPose(frame)[0:2]
         if not startPos:
             print("Thymio start position not found")
-        tSize =  100 #50 # based on the calibrated camera, the thymio can be approximated by this radius
+        tSize =  90 # based on the calibrated camera, the thymio can be approximated by this radius
         goalPos = ThymioVision.detectGoal(frame)
         if not goalPos:
             print("Goal not found")
             return
-
-
+        
+        if startPos[0] is None:
+            print("Invalid map. Thymio not found.")
+            return
+        if goalPos[0] is None:
+            print("Invalid map. Goal not found.")
+            return
         # clear out space around goal and start
         cv2.circle(edges, startPos, radius=int(tSize), thickness=-1, color=0)
         cv2.circle(edges, goalPos, radius=int(tSize), thickness=-1, color=0)
@@ -320,4 +357,8 @@ class ThymioVision:
                 if pixel == 255:
                     cv2.circle(final_map, (j,i), radius=int(tSize), thickness=-1, color=1)
 
+        if verbose:
+            plt.plot(startPos[0], startPos[1], 'o', color='red')
+            plt.plot(goalPos[0], goalPos[1], 'o', color='green')
+            plt.imshow(final_map)
         return (final_map, startPos, goalPos)
